@@ -3,9 +3,14 @@ from pickle import NONE
 import numpy as np
 from pandas import Int32Dtype
 import math
+import time
+
 
 from env import read_env
 from randomPath import generatePath
+from visualization import visualize_paths
+
+np.seterr(divide='ignore', invalid='ignore')
 
 __delta_t__ = 5
 __delta_r__ = 1
@@ -213,38 +218,61 @@ class Solution:
         return
 
 
-def bresenham(x1,y1,x2,y2, grids=NONE):
-    miny = min(y1,y2)
-    maxy = max(y1,y2)
 
-    if x1 == x2: 
-        for y in range(miny, maxy+1):
-            if grids is not NONE:
-                if not grids[x1,y]:
-                    return False
-        return True
-    elif x1 > x2:
-        x1, x2 = x2, x1
-        y1, y2 = y2, y1
-    
-    m_new = 2 * (y2 - y1)
-    slope_error_new = m_new - (x2 - x1)
-    
-    y=y1
-    for x in range(x1,x2+1):
-        # print("(",x ,",",y ,")")
-        y = min(maxy, max(miny, y))
-        if grids is not NONE:
-            if not grids[x,y]:
+def bresenham(x1:int,y1:int,x2:int,y2:int, grids=None)->bool:
+
+    print(f"==== {x1},{y1}->{x2},{y2}====")
+    x,y = x1,y1
+    dx = abs(x2-x1)
+    if dx == 0:
+        if y1 > y2:
+            y1,y2 = y2,y1
+        # xcoodinates = []
+        # ycoodinates = []
+        for k in range(y1, y2+1):
+            print(f"x={x},y={k}")
+            if grids is not None and not grids[x,k]:
                 return False
+            # xcoodinates.append(x)
+            # ycoodinates.append(k)
+        # print(xcoodinates)
+        # print(ycoodinates)
+        return True
+ 
+    # dx > 0
+    dy = abs(y2-y1)
+    gradient = dy/float(dx)
 
-        # Add slope to increment angle formed
-        slope_error_new =slope_error_new + m_new
-        # Slope error reached limit, time to
-        # increment y and update slope error.
-        if (slope_error_new >= 0):
-            y=y+1
-            slope_error_new = slope_error_new - 2 * (x2 - x1)
+    y_based = False
+    if gradient > 1:
+        y_based = True
+        dx, dy = dy, dx
+        x, y = y, x
+        x1, y1 = y1, x1
+        x2, y2 = y2, x2
+    p = 2*dy-dx
+    print(f"x={x},y={y}")
+    # xcoodinates = [x]
+    # ycoodinates = [y]
+    if grids is not None:
+        if (not y_based and not grids[x,y]) or (y_based and not grids[y,x]):
+            return False
+    
+    for k in range(dx):
+        if p > 0:
+            y = y+1 if y<y2 else y-1
+            p = p+2*(dy-dx)
+        else:
+            p = p+2*dy
+        x = x+1 if x<x2 else x-1
+        print(f"x={x},y={y}") if not y_based else print(f"x={y},y={x}")
+        if grids is not None:
+            if (not y_based and not grids[x,y]) or (y_based and not grids[y,x]):
+                return False
+        # xcoodinates.append(x)
+        # ycoodinates.append(y)
+    # print(xcoodinates)
+    # print(ycoodinates)
     return True
     
 def generateLOS(width, height, LOS, grids):
@@ -259,44 +287,71 @@ def generateLOS(width, height, LOS, grids):
                     LOS[x2,y2,x1,y1] = los
                     
 
-def simulate(width, height, ix, iy, jx, jy, grids):
-    # width = 10
-    # height = 10
-    # grids = np.ones([width, height], dtype=bool)
-    # print(f"grids={grids}")
-    # # generate blockages
-    # for i in range(2, 5):
-    #     for j in range(4, 9):
-    #         grids[i,j] = 0
+def simulate(width, height, ix, iy, jx, jy, grids, virt_paths):
+
+    rdw_paths = []
+    
     print("====== init ========")
     LOS = np.ones([width, height, width, height], dtype=bool)
     generateLOS(width, height, LOS, grids)
 
-    paths = []
-    for i in range(10):
-        path = generatePath(10, 5)
-        paths.append(path)
-
-    for path in paths:
+    for path in virt_paths:
         virtual_path = VirtualPath(path) 
         virtual_path.print()
+
         print("======== dp ==========")
+        startTime = time.time()
         sol = Solution(width, height, grid=grids, LOS=LOS)
         ans = sol.find_path(ix,iy,jx,jy,virtual_path)
+        endTime = time.time()
+
         print(f"minimum cost = {ans}")
-        print(f"recall = {RE_CALL}")
-        print(f"no cand = {NO_CAND}")
-            
+        print(f"time = {str(endTime-startTime)}")
+        # print(f"recall = {RE_CALL}")
+        # print(f"no cand = {NO_CAND}")
+        
         sol.BACK_TRACK(ix,iy,jx,jy, 0)
         print(f"rdw = {sol.rdwPath}")
-        virtual_path.compare(sol.rdwPath)
+        rdw_paths.append(sol.rdwPath)
+        # virtual_path.compare(sol.rdwPath)
+    return rdw_paths
 
 if __name__ == "__main__":
-    print(THETA_C)
-    # for i in range(1,3):
+
+    # paths = []
+    # for i in range(1):
+    #     path = generatePath(4, 5)
+    #     paths.append(path)
+
+    # for i in range(1,2):
     #     env_file = "./env/env_"+str(i)+".txt"
     #     w,h,ix,iy,jx,jy,grids=read_env(env_file)
-    #     simulate(w,h,ix,iy,jx,jy,grids)
+    #     rdw_paths = simulate(w,h,ix,iy,jx,jy,grids,paths)
+    #     visualize_paths(paths, rdw_paths, grids)
+    # env_file = "./env/env_1.txt"
+    # w,h,ix,iy,jx,jy,grids=read_env(env_file)
+    # LOS = np.ones([w, h, w, h], dtype=bool)
+    # for x in range(w):
+    #     for y in range(h):
+    #         bresenham(ix,iy,x,y,grids)
+    bresenham(0,0,5,0)
+    bresenham(0,0,6,2)
+    bresenham(0,0,5,5)
+    bresenham(0,0,2,6)
+    bresenham(0,0,0,5)
+    bresenham(0,0,-2,6)
+    bresenham(0,0,-5,5)
+    bresenham(0,0,-6,2)
+    bresenham(0,0,-5,0)
+    bresenham(0,0,-6,-2)
+    bresenham(0,0,-5,-5)
+    bresenham(0,0,-2,-6)
+    bresenham(0,0,0,-5)
+    bresenham(0,0,2,-6)
+    bresenham(0,0,5,-5)
+    bresenham(0,0,6,-2)
+
+
     
 
 
