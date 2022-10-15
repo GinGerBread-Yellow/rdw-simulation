@@ -1,3 +1,5 @@
 __pycache__/
 ref/
 *.zip
+env/*.npy
+env/path_sim/
